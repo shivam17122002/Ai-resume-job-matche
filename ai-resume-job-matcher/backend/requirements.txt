@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+python-multipart
+pydantic
+sqlalchemy
+psycopg2-binary
+python-dotenv
+pdfplumber
+google-generativeai
+elasticsearch==8.11.0
+passlib[bcrypt]
+python-jose[cryptography]
+pydantic[email]
+
+
