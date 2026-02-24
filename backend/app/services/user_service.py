@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 from app.schemas.user import UserCreate
 from app.core.security import get_password_hash
+from app.core.security import verify_password
 
 
 class UserService:
@@ -21,3 +22,12 @@ class UserService:
     @staticmethod
     def get_by_id(db: Session, user_id: int):
         return db.query(User).filter(User.id == user_id).first()
+    
+    @staticmethod
+    def authenticate_user(db: Session, email: str, password: str):
+        user = UserService.get_by_email(db, email)
+        if not user:
+            return None
+        if not verify_password(password, user.hashed_password):
+            return None
+        return user

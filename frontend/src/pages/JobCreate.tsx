@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isAxiosError } from "axios";
 import { createJob } from "../services/jobService";
 
 const JobCreate = () => {
@@ -30,9 +31,13 @@ const JobCreate = () => {
 
       setMessage("✅ Job created successfully");
       setForm({ title: "", company: "", description: "", required_skills: "", location: "", salary: "" });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setMessage(err?.response?.data?.detail || "❌ Failed to create job");
+      if (isAxiosError<{ detail?: string }>(err)) {
+        setMessage(err.response?.data?.detail || "❌ Failed to create job");
+      } else {
+        setMessage("❌ Failed to create job");
+      }
     }
   };
 

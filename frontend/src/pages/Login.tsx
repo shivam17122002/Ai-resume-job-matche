@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isAxiosError } from "axios";
 import { login, register } from "../services/authService";
 
 const Login: React.FC = () => {
@@ -10,8 +11,12 @@ const Login: React.FC = () => {
     try {
       await login({ email, password });
       setMessage("Logged in");
-    } catch (err: any) {
-      setMessage(err?.response?.data?.detail || "Login failed");
+    } catch (err: unknown) {
+      if (isAxiosError<{ detail?: string }>(err)) {
+        setMessage(err.response?.data?.detail || "Login failed");
+      } else {
+        setMessage("Login failed");
+      }
     }
   };
 
@@ -19,8 +24,12 @@ const Login: React.FC = () => {
     try {
       await register({ email, password });
       setMessage("Registered, you can now login");
-    } catch (err: any) {
-      setMessage(err?.response?.data?.detail || "Registration failed");
+    } catch (err: unknown) {
+      if (isAxiosError<{ detail?: string }>(err)) {
+        setMessage(err.response?.data?.detail || "Registration failed");
+      } else {
+        setMessage("Registration failed");
+      }
     }
   };
 

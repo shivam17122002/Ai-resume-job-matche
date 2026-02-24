@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isAxiosError } from "axios";
 import { uploadResume, analyzeResume } from "../services/resumeService";
 
 const ResumeUpload = () => {
@@ -25,9 +26,13 @@ const ResumeUpload = () => {
       setMessage(
         `Skills: ${analysisResponse.skills?.join(", ") || "(none)"}`
       );
-    } catch (error: any) {
-      setMessage(error?.response?.data?.detail || "Error uploading or analyzing resume");
+    } catch (error: unknown) {
       console.error(error);
+      if (isAxiosError<{ detail?: string }>(error)) {
+        setMessage(error.response?.data?.detail || "Error uploading or analyzing resume");
+      } else {
+        setMessage("Error uploading or analyzing resume");
+      }
     } finally {
       setLoading(false);
     }

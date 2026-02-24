@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.db.database import SessionLocal
 from app.schemas.resume import ResumeCreate
 from app.services.resume_service import ResumeService
@@ -69,7 +70,7 @@ def full_health(db: Session = Depends(get_db), es: Elasticsearch = Depends(get_e
 
     # DB: simple query
     try:
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
     except Exception as e:
         logging.exception("DB health check failed: %s", e)
         status_obj["db"] = False
@@ -191,8 +192,6 @@ def delete_job(job_id: int, db: Session = Depends(get_db), es: Elasticsearch = D
 @router.post("/admin/reindex/jobs")
 def reindex_jobs(db: Session = Depends(get_db), es: Elasticsearch = Depends(get_es_client), current_user = Depends(get_current_user)):
     # Basic protection; in a real app check admin role
-    jobs = db.query(JobService.__orig_bases__[0].__args__[0] if False else None).all() if False else db.query.__self__ if False else None
-    # Fallback: query Job model directly
     from app.models.job import Job as JobModel
     jobs = db.query(JobModel).all()
 
@@ -216,9 +215,7 @@ def login(form_data: UserCreate, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
-    from app.core.security import verify_password as verify_pwd
-
-    if not verify_pwd(form_data.password, user.hashed_password):
+    if not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
     access_token = create_access_token({"user_id": user.id})

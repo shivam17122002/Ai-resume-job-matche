@@ -3,6 +3,22 @@ import { searchJobs } from "../services/jobService";
 import JobCard from "../components/JobCard";
 import type { JobResponse } from "../types/job";
 
+type SearchHit = {
+  job_id: number | string;
+  source: {
+    title: string;
+    company: string;
+    description: string;
+    required_skills?: string[];
+    location?: string;
+    salary?: string;
+  };
+};
+
+type SearchJobsResponse = {
+  results?: SearchHit[];
+};
+
 const JobSearch: React.FC = () => {
   const [q, setQ] = useState("");
   const [location, setLocation] = useState("");
@@ -13,8 +29,8 @@ const JobSearch: React.FC = () => {
   const handleSearch = async () => {
     setLoading(true);
     try {
-      const resp = await searchJobs({ q, location, skills: skills ? skills.split(",").map(s => s.trim()) : undefined });
-      setResults(resp.results?.map((r: any) => ({
+      const resp = await searchJobs({ q, location, skills: skills ? skills.split(",").map(s => s.trim()) : undefined }) as SearchJobsResponse;
+      setResults(resp.results?.map((r) => ({
         id: Number(r.job_id),
         title: r.source.title,
         company: r.source.company,

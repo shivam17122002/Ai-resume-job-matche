@@ -1,55 +1,73 @@
-# Project Interview Notes — AI Resume Analyzer & Job Matcher
+# Interview Notes: AI Resume Analyzer & Job Matcher
 
-Summary:
-- Backend: FastAPI, SQLAlchemy, Pydantic, PostgreSQL (or sqlite for dev), Elasticsearch for full-text job search.
-- Frontend: React 19 + TypeScript + Vite, Tailwind CSS for UI.
-- Auth: JWT using `python-jose`, passwords hashed with `passlib[bcrypt]`.
-- AI: optional Gemini/OpenAI integration for resume analysis (controlled by `GEMINI_API_KEY`).
+## 1. 30-Second Project Pitch
+This project is a full-stack resume intelligence platform. Users register/login, upload PDF resumes, run AI analysis to extract skills and experience, create jobs, search jobs via Elasticsearch, and calculate resume-job match and skill gaps. FastAPI handles the backend, React handles the frontend, PostgreSQL stores source-of-truth data, and Elasticsearch handles search relevance.
 
-Architecture:
-- Layered: `models` → `schemas` → `services` → `api/routes` → `core` (config, ES client, security) → `db`.
-- PostgreSQL is source of truth for jobs/resumes/users; Elasticsearch provides search and ranking.
+## 2. Architecture Summary
+- Layered backend: `api` -> `services` -> `models/schemas` -> `db/core`
+- Frontend: component-state navigation with pages for login, upload/analyze, create job, and search jobs
+- Data architecture:
+  - PostgreSQL: users, resumes, jobs
+  - Elasticsearch: searchable index for jobs and analyzed resumes
+- Auth: JWT bearer tokens with password hashing (bcrypt via `passlib`)
 
-Key Endpoints:
-- `POST /api/auth/register` — body `{email, password}` → returns created user (no token).
-- `POST /api/auth/login` — body `{email, password}` → returns `{access_token, token_type}`.
-- `POST /api/resumes/upload` — multipart file (pdf) — requires `Authorization: Bearer <token>` — extracts text, stores resume.
-- `POST /api/resumes/{id}/analyze` — runs AI analysis, saves skills array (JSON) and experience. Indexes into ES.
-- `POST /api/jobs` — create job, requires auth; owner_id saved; job is indexed into ES.
-- `GET /api/search/jobs` — params `q, location, skills[], page, size` — uses multi_match with fuzziness and title boosting.
-- `DELETE /api/jobs/{id}` — owner-only delete (removes from DB and ES).
+## 3. Key Backend Flows
 
-Important implementation notes:
-- Skills stored as `JSON` (maps to Postgres JSONB) for efficient queries and to feed ES as keyword arrays.
-- ES mapping: `title` text (with `raw` keyword), `description` text, `required_skills` keyword, `location` keyword, `salary` keyword.
-- Job search uses `multi_match` (title^3 boosting) and `terms` filter for skills; uses `fuzziness: AUTO` for resilient matching.
-- Resume parsing uses `pdfplumber` with 10MB limit; scanned PDFs without text will error.
-- JWT secret is required in production (`JWT_SECRET_KEY`).
+Auth:
+- `POST /api/auth/register` creates user with hashed password
+- `POST /api/auth/login` verifies credentials and returns JWT
 
-Deployment checklist / commands:
-- Build and run with Docker Compose: `docker compose up --build`.
-- For production backend: build image, run with Gunicorn + Uvicorn workers (suggested `gunicorn -k uvicorn.workers.UvicornWorker app.main:app -w 4`).
-- Use Alembic to manage DB migrations: `alembic init alembic`, then `alembic revision --autogenerate -m "init"`, `alembic upgrade head`.
+Resume flow:
+- `POST /api/resumes/upload` accepts PDF, validates type/size (10MB), extracts text with `pdfplumber`, stores resume
+- `POST /api/resumes/{id}/analyze` calls Gemini model (`gemini-flash-lite-latest`), stores `skills` and `experience_years`, indexes resume in Elasticsearch
 
-Common interview questions & short answers:
-- Q: Why use Elasticsearch alongside Postgres?
-  A: Postgres is the source of truth and supports relational queries; ES provides advanced full-text search, fuzziness, relevance scoring, and faster search over large text fields.
+Job flow:
+- `POST /api/jobs` creates job for current user and indexes it in Elasticsearch
+- `DELETE /api/jobs/{id}` enforces owner-only delete and removes ES document
+- `GET /api/search/jobs` supports keyword, location, skills, pagination, sorting
 
-- Q: How are skills stored and why?
-  A: Stored as JSON/JSONB in Postgres and as keyword arrays in ES. This allows structural queries (terms) and efficient indexing for skill-based filters.
+Matching flow:
+- `GET /api/match/resume/{resume_id}/job/{job_id}`
+- `GET /api/gap/resume/{resume_id}/job/{job_id}`
 
-- Q: How is authentication implemented?
-  A: Passwords hashed with bcrypt via `passlib`. JWTs are created with `python-jose`, stored client-side (localStorage) and sent in `Authorization` header. Backend validates token and loads user via dependency injection.
+## 4. Design Decisions You Can Defend
+- Postgres + Elasticsearch:
+  - Postgres is reliable transactional storage.
+  - Elasticsearch gives fast fuzzy full-text search and relevance scoring.
+- Skills stored as JSON:
+  - Easy to persist structured extracted skills and re-use for ES indexing.
+- Service layer:
+  - Keeps route handlers thin and business logic testable/reusable.
+- Token auth via dependency:
+  - Shared `get_current_user` enforces auth consistently across protected routes.
 
-- Q: How does resume analysis work?
-  A: Text extracted from PDF using `pdfplumber`, then sent to AI model (Gemini/OpenAI) to extract skills, experience years and role; result validated with Pydantic `ResumeAnalysisResult` before saving.
+## 5. Practical Tradeoffs / Current Limitations
+- Table creation uses `Base.metadata.create_all` on startup, not Alembic migrations yet.
+- `admin/reindex/jobs` is token-protected but lacks strict role-based admin checks.
+- Frontend has a service method for top resumes (`/match/job/{id}/top-resumes`) but backend route is not implemented.
+- No refresh-token/session strategy yet; auth is simple bearer token in localStorage.
 
-- Q: How to ensure security in production?
-  A: Use strong JWT secrets (env), HTTPS, rate limiting, CORS restrictions, store tokens securely (prefer refresh tokens + httpOnly cookies), avoid storing secrets in repo, and enable ES security in production.
+## 6. Common Interview Questions (with concise answers)
 
-- Q: How to run migrations?
-  A: Install `alembic` and configure `alembic.ini` with `sqlalchemy.url` pointing to `DATABASE_URL`. Use `alembic revision --autogenerate` then `alembic upgrade head`.
+Q: Why not use only PostgreSQL for search?
+A: PostgreSQL can search, but Elasticsearch handles fuzzy multi-field matching and relevance ranking better at scale for job discovery use cases.
 
-Prep tips for demo:
-- Demonstrate upload→analyze→index→search flow: upload a PDF, wait for analysis, search by skill to surface job, show match score.
-- Show the DB (psql) that skills stored as JSON and ES index documents via `_search` API.
+Q: How is resume text extracted?
+A: `pdfplumber` reads PDF text. Scanned/non-text PDFs return a clear error (`PDF contains no extractable text`).
+
+Q: How is AI output validated?
+A: Gemini response is parsed as JSON and validated using Pydantic schema `ResumeAnalysisResult`.
+
+Q: How do you enforce authorization?
+A: JWT in `Authorization: Bearer <token>`, decoded in `get_current_user`, and owner checks for protected resources (for example resume analysis and job deletion).
+
+Q: What would you improve first for production?
+A: Add Alembic migrations, role-based auth, secure secret management/rotation, tighter CORS, rate limiting, and stronger token strategy (refresh tokens or httpOnly cookies).
+
+## 7. Demo Script (2-3 minutes)
+1. Register + login from frontend and confirm token stored.
+2. Upload a real PDF resume and run analysis.
+3. Create a job with clear required skills.
+4. Search jobs by skill keyword and location.
+5. Run resume-job match and skill gap endpoints.
+6. Show `/api/health/full` for DB/Elasticsearch status.
