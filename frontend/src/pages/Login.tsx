@@ -2,6 +2,18 @@ import { useState } from "react";
 import { isAxiosError } from "axios";
 import { login, register } from "../services/authService";
 
+type ErrorDetail = { msg?: string };
+
+const getApiErrorMessage = (err: unknown, fallback: string): string => {
+  if (!isAxiosError(err)) return fallback;
+
+  const detail = err.response?.data?.detail as string | ErrorDetail[] | undefined;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail.length > 0) return detail[0]?.msg || fallback;
+
+  return fallback;
+};
+
 const Login: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -12,11 +24,7 @@ const Login: React.FC = () => {
       await login({ email, password });
       setMessage("Logged in");
     } catch (err: unknown) {
-      if (isAxiosError<{ detail?: string }>(err)) {
-        setMessage(err.response?.data?.detail || "Login failed");
-      } else {
-        setMessage("Login failed");
-      }
+      setMessage(getApiErrorMessage(err, "Login failed"));
     }
   };
 
@@ -25,11 +33,7 @@ const Login: React.FC = () => {
       await register({ email, password });
       setMessage("Registered, you can now login");
     } catch (err: unknown) {
-      if (isAxiosError<{ detail?: string }>(err)) {
-        setMessage(err.response?.data?.detail || "Registration failed");
-      } else {
-        setMessage("Registration failed");
-      }
+      setMessage(getApiErrorMessage(err, "Registration failed"));
     }
   };
 
